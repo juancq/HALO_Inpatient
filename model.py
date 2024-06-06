@@ -264,6 +264,9 @@ class HALOModel(L.LightningModule):
         return loss
 
     def configure_optimizers(self):
-        optimizer = torch.optim.AdamW(self.parameters(), lr=self.config.lr)
+        # todo: warmup steps should be moved to model config
+        # number of steps is dataset dependent
+        optimizer = schedulefree.AdamWScheduleFree(self.parameters(), 
+                                        lr=self.config.lr, warmup_steps=1000)
         return optimizer
 
