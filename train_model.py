@@ -10,7 +10,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint, EarlyStopping
 from halo_data_module import HALODataModule
 from lightning.pytorch.callbacks import RichProgressBar
 
-from halo import HALOModel
+from model import HALOModel
 from config import HALOConfig
 
 def main():
@@ -65,7 +65,8 @@ def main():
     trainer.fit(model, data_module)
 
     # Evaluate the model
-    trainer.test(model, datamodule=data_module)
+    # need to add test set to data module in order to call this
+    #trainer.test(model, datamodule=data_module)
 
 
 if __name__ == '__main__':
