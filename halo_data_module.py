@@ -27,6 +27,9 @@ def collate_fn(batch):
 
 
 class EHRDataset(Dataset):
+    '''
+    Assumes the use of a polars dataframe.
+    '''
     def __init__(self, ehr_data, config, include_id=False):
         self.ehr_data = ehr_data
         self.config = config
