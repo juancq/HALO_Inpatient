@@ -9,6 +9,8 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import lightning as L
+import schedulefree
 
 def gelu(x):
     return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
@@ -184,13 +186,15 @@ class FineAutoregressiveHead(nn.Module):
         code_logits = self.auto2(torch.relu(self.auto1(currVisit)))[:,:,self.n_embd-1:-1]
         return code_logits
 
-class HALOModel(nn.Module):
+class HALOModel(L.LightningModule):
     def __init__(self, config):
         super(HALOModel, self).__init__()
         self.transformer = CoarseTransformerModel(config)
         self.ehr_head = FineAutoregressiveHead(config)
+        self.pos_loss_weight = config.pos_loss_weight
+        self.config = config
 
-    def forward(self, input_visits, position_ids=None, ehr_labels=None, ehr_masks=None, past=None, pos_loss_weight=None):
+    def forward(self, input_visits, position_ids=None, ehr_labels=None, ehr_masks=None, past=None):
         hidden_states = self.transformer(input_visits, position_ids, past)
         code_logits = self.ehr_head(hidden_states, input_visits)
         sig = nn.Sigmoid()
@@ -198,13 +202,13 @@ class HALOModel(nn.Module):
         if ehr_labels is not None:    
             shift_labels = ehr_labels[..., 1:, :].contiguous()
             loss_weights = None
-            if pos_loss_weight is not None:
+            if self.pos_loss_weight is not None:
                 loss_weights = torch.ones(code_probs.shape, device=code_probs.device)
-                loss_weights = loss_weights + (pos_loss_weight-1) * shift_labels
+                loss_weights = loss_weights + (self.pos_loss_weight-1) * shift_labels
             if ehr_masks is not None:
                 code_probs = code_probs * ehr_masks
                 shift_labels = shift_labels * ehr_masks
-                if pos_loss_weight is not None:
+                if self.pos_loss_weight is not None:
                     loss_weights = loss_weights * ehr_masks
 
             bce = nn.BCELoss(weight=loss_weights)
@@ -235,3 +239,31 @@ class HALOModel(nn.Module):
             i = i + first_nonzero + 1
         
         return input_visits
+
+    def training_step(self, batch, batch_idx):
+        # ehr_labels is also input_visits
+        ehr_labels, ehr_masks = batch
+        input_visits = ehr_labels
+        position_ids = None
+        loss, code_probs, shift_labels = self(input_visits, position_ids, ehr_labels, ehr_masks)
+        self.log('train_loss', loss, prog_bar=True, on_epoch=True, on_step=False)
+        return loss
+
+    def validation_step(self, batch, batch_idx):
+        ehr_labels, ehr_masks = batch
+        input_visits = ehr_labels
+        position_ids = None
+        loss, code_probs, shift_labels = self(input_visits, position_ids, ehr_labels, ehr_masks)
+        self.log('val_loss', loss, prog_bar=True, on_epoch=True)
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        input_visits, position_ids, ehr_labels, ehr_masks = batch
+        loss, code_probs, shift_labels = self(input_visits, position_ids, ehr_labels, ehr_masks)
+        self.log('test_loss', loss)
+        return loss
+
+    def configure_optimizers(self):
+        optimizer = torch.optim.AdamW(self.parameters(), lr=self.config.lr)
+        return optimizer
+
