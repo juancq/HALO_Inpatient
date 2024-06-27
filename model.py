@@ -13,20 +13,6 @@ import torch.nn.functional as F
 def gelu(x):
     return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
-class LayerNorm(nn.Module):
-    def __init__(self, hidden_size, eps=1e-12):
-        """Construct a layernorm module in the TF style (epsilon inside the square root)."""
-        super(LayerNorm, self).__init__()
-        self.weight = nn.Parameter(torch.ones(hidden_size))
-        self.bias = nn.Parameter(torch.zeros(hidden_size))
-        self.variance_epsilon = eps
-
-    def forward(self, x):
-        u = x.mean(-1, keepdim=True)
-        s = (x - u).pow(2).mean(-1, keepdim=True)
-        x = (x - u) / torch.sqrt(s + self.variance_epsilon)
-        return self.weight * x + self.bias
-
 class Conv1D(nn.Module):
     def __init__(self, nf, nx):
         super(Conv1D, self).__init__()
@@ -110,9 +96,9 @@ class Block(nn.Module):
     def __init__(self, n_ctx, config, scale=False):
         super(Block, self).__init__()
         nx = config.n_embd
-        self.ln_1 = LayerNorm(nx, eps=config.layer_norm_epsilon)
+        self.ln_1 = nn.LayerNorm(nx, eps=config.layer_norm_epsilon)
         self.attn = Attention(nx, n_ctx, config, scale)
-        self.ln_2 = LayerNorm(nx, eps=config.layer_norm_epsilon)
+        self.ln_2 = nn.LayerNorm(nx, eps=config.layer_norm_epsilon)
         self.mlp = MLP(4 * nx, config)
 
     def forward(self, x, layer_past=None):
@@ -133,7 +119,7 @@ class CoarseTransformerModel(nn.Module):
         self.pos_embed_mat = nn.Embedding(config.n_positions, config.n_embd)
         block = Block(config.n_ctx, config, scale=True)
         self.h = nn.ModuleList([copy.deepcopy(block) for _ in range(config.n_layer)])
-        self.ln_f = LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
+        self.ln_f = nn.LayerNorm(config.n_embd, eps=config.layer_norm_epsilon)
 
     def forward(self, input_visits, position_ids=None, past=None):
         if past is None:
