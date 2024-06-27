@@ -13,21 +13,6 @@ import torch.nn.functional as F
 def gelu(x):
     return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
-class Conv1D(nn.Module):
-    def __init__(self, nf, nx):
-        super(Conv1D, self).__init__()
-        self.nf = nf
-        w = torch.empty(nx, nf)
-        nn.init.normal_(w, std=0.02)
-        self.weight = nn.Parameter(w)
-        self.bias = nn.Parameter(torch.zeros(nf))
-
-    def forward(self, x):
-        size_out = x.size()[:-1] + (self.nf,)
-        x = torch.addmm(self.bias, x.view(-1, x.size(-1)), self.weight)
-        x = x.view(*size_out)
-        return x
-
 class Attention(nn.Module):
     def __init__(self, nx, n_ctx, config, scale=False):
         super(Attention, self).__init__()
@@ -37,8 +22,8 @@ class Attention(nn.Module):
         self.n_head = config.n_head
         self.split_size = n_state
         self.scale = scale
-        self.c_attn = Conv1D(n_state * 3, nx)
-        self.c_proj = Conv1D(n_state, nx)
+        self.c_attn = nn.Linear(nx, n_state * 3)
+        self.c_proj = nn.Linear(nx, n_state)
 
     def _attn(self, q, k, v):
         w = torch.matmul(q, k)
@@ -83,8 +68,8 @@ class MLP(nn.Module):
     def __init__(self, n_state, config):  # in MLP: n_state=3072 (4 * n_embd)
         super(MLP, self).__init__()
         nx = config.n_embd
-        self.c_fc = Conv1D(n_state, nx)
-        self.c_proj = Conv1D(nx, n_state)
+        self.c_fc = nn.Linear(nx, n_state)
+        self.c_proj = nn.Linear(n_state, nx)
         self.act = gelu
 
     def forward(self, x):
