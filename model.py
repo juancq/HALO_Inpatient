@@ -10,8 +10,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-def gelu(x):
-    return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
 
 class Attention(nn.Module):
     def __init__(self, nx, n_ctx, config, scale=False):
@@ -70,7 +68,7 @@ class MLP(nn.Module):
         nx = config.n_embd
         self.c_fc = nn.Linear(nx, n_state)
         self.c_proj = nn.Linear(n_state, nx)
-        self.act = gelu
+        self.act = F.gelu
 
     def forward(self, x):
         h = self.act(self.c_fc(x))
